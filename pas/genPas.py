@@ -255,7 +255,7 @@ Tout = []
 
 Q0 = [[0],[0.3],[-0.4],[0.81],[0.4],[0.3]]
 #5 cm vers l'avant, 2cm vers la droite avec une hauteur de pas de 3cm, la trajectoire est séparé en 25 points
-Trajectoire, _ = genereTrajectoirePas(0.06, -0.01, 0.03, )
+Trajectoire, _ = genereTrajectoirePas(0.06, -0.01, 0.03, 25)
 GoalMats = []
 Q=Q0 #Q0 est la position de départ, Q est la position qui avance
 chartArr = [FK(Q)]
