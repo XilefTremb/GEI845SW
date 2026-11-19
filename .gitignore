@@ -1,3 +1,7 @@
+#ros simulation
+log/
+build/
+install/
 #drawio temp file
 *.dtmp
 
