@@ -59,6 +59,8 @@ wsl
 ```
 
 ## Setup du workspace
+[Simonjb] puisque j'ai inclu le src avec les modifications au git vous pouvez directement aller au #2
+
 1. unzip le dossier "gei845_ws" dans le dossier "simulation" du projet
 2. ouvrir une invite de commande windows et cd dans le dossier "gei845_ws"
     - petit truc: vous pouvez écrire "cmd" dans le chemin de fichier de l'explorateur de fichier pour ouvrir une invite de commande à cet emplacement directement
