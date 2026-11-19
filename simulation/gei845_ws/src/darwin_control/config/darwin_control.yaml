@@ -1,0 +1,210 @@
+gz_ros_control:
+  ros__parameters:
+    position_proportional_gain: 0.5
+
+controller_manager:
+  ros__parameters:
+    update_rate: 100  # Hz
+
+joint_state_broadcaster:
+  ros__parameters:
+    type: joint_state_broadcaster/JointStateBroadcaster
+    joints:
+        - j_pan
+        - j_tilt
+        - j_shoulder_l
+        - j_high_arm_l
+        - j_low_arm_l
+        - j_wrist_l
+        - j_gripper_l
+        - j_shoulder_r
+        - j_high_arm_r
+        - j_low_arm_r
+        - j_wrist_r
+        - j_gripper_r
+        - j_pelvis_l
+        - j_thigh1_l
+        - j_thigh2_l
+        - j_tibia_l
+        - j_ankle1_l
+        - j_ankle2_l
+        - j_pelvis_r
+        - j_thigh1_r
+        - j_thigh2_r
+        - j_tibia_r
+        - j_ankle1_r
+        - j_ankle2_r
+
+#HEAD
+j_pan_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+        - j_pan
+
+j_tilt_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+        - j_tilt
+
+# LEFT ARM
+j_shoulder_l_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+        - j_shoulder_l
+
+j_high_arm_l_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+        - j_high_arm_l
+
+j_low_arm_l_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+        - j_low_arm_l
+
+j_wrist_l_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_wrist_l
+
+j_gripper_l_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_gripper_l
+
+# RIGHT ARM
+j_shoulder_r_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_shoulder_r
+
+j_high_arm_r_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_high_arm_r
+
+j_low_arm_r_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_low_arm_r
+
+j_wrist_r_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_wrist_r
+
+j_gripper_r_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_gripper_r
+
+# LEFT LEG
+j_pelvis_l_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_pelvis_l
+
+j_thigh1_l_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_thigh1_l
+
+j_thigh2_l_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_thigh2_l
+
+j_tibia_l_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_tibia_l
+
+j_ankle1_l_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_ankle1_l
+
+j_ankle2_l_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_ankle2_l
+      
+# RIGHT LEG
+j_pelvis_r_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_pelvis_r
+
+j_thigh1_r_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_thigh1_r
+
+j_thigh2_r_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_thigh2_r
+
+j_tibia_r_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_tibia_r
+
+j_ankle1_r_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_ankle1_r
+
+j_ankle2_r_position_controller:
+  ros__parameters:
+    type: forward_command_controller/ForwardCommandController
+    interface_name: position
+    joints:
+      - j_ankle2_r
+

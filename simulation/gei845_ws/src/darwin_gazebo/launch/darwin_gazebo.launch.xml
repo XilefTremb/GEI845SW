@@ -1,0 +1,27 @@
+<launch>
+  <!-- <group scoped="true">
+    <push-ros-namespace namespace="/darwin"/> -->
+    <let name="robot_description_content" value="$(command '$(find-exec xacro) $(find-pkg-share darwin_description)/urdf/darwin.urdf')"/>
+
+    <node pkg="robot_state_publisher" exec="robot_state_publisher" output="both">
+      <param name="robot_description" value="$(var robot_description_content)" />
+      <param name="use_sim_time" value="true" />
+    </node>
+
+    <include file="$(find-pkg-share ros_gz_sim)/launch/gz_sim.launch.py">
+      <!-- <arg name="gz_args" value="$(find-pkg-share darwin_gazebo)/worlds/robot.world"/> -->
+      <arg name="paused" value="true"/>
+      <arg name="gz_args" value="-r empty.sdf"/>
+    </include>
+
+    <node pkg="ros_gz_bridge" exec="parameter_bridge" args="
+          /clock@rosgraph_msgs/msg/Clock[ignition.msgs.Clock"
+          output="screen"/>
+
+    <!-- Create robot in Gazebo -->
+    <!-- <node pkg="ros_gz_sim" exec="create" output="screen" args="-topic /darwin/robot_description -name darwin -z 0.3417"/> -->
+    <node pkg="ros_gz_sim" exec="create" output="screen" args="-topic /robot_description -name darwin -z 0.3417"/>
+
+    <include file="$(find-pkg-share darwin_control)/launch/darwin_control.launch.xml"/>
+  <!-- </group> -->
+</launch>

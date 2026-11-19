@@ -1,0 +1,5 @@
+Nb_echantillons
+Rate
+Temp_joints_1	 j_pelvis_r_pos_1, j_thigh1_r_pos_1, j_thigh2_r_pos_1, j_tibia_r_pos_1, j_ankle1_r_pos_1, j_ankle2_r_pos_1
+Temp_joints_2	 j_pelvis_r_pos_2, j_thigh1_r_pos_2, j_thigh2_r_pos_2, j_tibia_r_pos_2, j_ankle1_r_pos_2, j_ankle2_r_pos_2
+
