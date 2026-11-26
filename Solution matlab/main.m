@@ -1,174 +1,491 @@
-%%% main.m  (etapes 2 et 3)
-%%% Etape 2 : empreintes des pieds | Etape 3 : trajectoire de reference du ZMP
-%%% Prerequis : le depot de Kajita (ForwardKinematics, FindMother, ...) est dans le path
-%%%   addpath(genpath('chemin/vers/IntroductionToHumanoidRobotics'));
+clc 
+clear all
+close all
 
-clear; clc; close all;
 addpath(genpath('Fct kajita'));
 
-%% 1) Creer le robot (remplit la variable GLOBALE uLINK, retourne les indices)
 global uLINK
+
+% Initialisation du robot -------------------------------------------------
 ID = SetupDarwinRobot();
 
-%% 2) Lire des dimensions directement dans le modele
-hipY   = uLINK(ID.LLEG_J0).b(2);          % demi-ecart des hanches (0.037 m)
-legLen = -(uLINK(ID.LLEG_J1).b(3) + uLINK(ID.LLEG_J3).b(3) + uLINK(ID.LLEG_J4).b(3));  % hanche -> cheville
-fprintf('Demi-ecart hanches = %.4f m, hauteur hanche (J0) -> cheville = %.4f m\n', hipY, legLen);
+M = TotalMass(ID.BODY);
 
-% Verification : position des chevilles dans la pose initiale (FK deja appelee dans le setup)
-pR = uLINK(ID.RLEG_J5).p;
-pL = uLINK(ID.LLEG_J5).p;
-fprintf('Cheville D : [%.4f %.4f %.4f]\n', pR);
-fprintf('Cheville G : [%.4f %.4f %.4f]\n', pL);
+% Posture initiale (Half-Sitting) -----------------------------------------
+theta = deg2rad(20); % angle de flexion de la hanche par rapport au body
+% Permet d'éviter de commencer la sim en position de singularité
 
-%% 3) Dimensions du pied (A CONFIRMER dans la documentation ROBOTIS)
-footL  = 0.104;    % longueur du pied  [m]  (direction x)
-footW  = 0.066;    % largeur du pied   [m]  (direction y)
-footOx = 0.0;      % decalage x du centre de la semelle par rapport a la cheville [m]
-ankleH = 0.0335;   % hauteur cheville -> semelle [m] (doit etre la meme valeur que dans SetupDarwinRobot)
+% Jambe droite
+uLINK(ID.RLEG_J2).q = -theta;
+uLINK(ID.RLEG_J3).q = 2*theta;
+uLINK(ID.RLEG_J4).q = -theta;
 
-fprintf('Hauteur de la semelle en pose initiale : %.4f m (doit etre ~0)\n', pR(3) - ankleH);
+% Jambe gauche
+uLINK(ID.LLEG_J2).q = -theta;
+uLINK(ID.LLEG_J3).q = 2*theta;
+uLINK(ID.LLEG_J4).q = -theta;
 
-%% 4) Parametres de marche
-stride  = 0.04;                 % longueur de pas [m]
-stepW   = 2*hipY + 0.02;        % ecart lateral entre les chevilles [m] (on elargit un peu : 2*hipY ne laisse que 8 mm entre les pieds)
-nSteps  = 6;                    % nombre de pas
-firstSwing = 'R';               % pied qui avance en premier ('R' ou 'L')
+% Dimensions du robot
+hipOffsetZ = -uLINK(ID.RLEG_J0).b(3);
+hipLength  = -uLINK(ID.RLEG_J1).b(3);
+thighLength = -uLINK(ID.RLEG_J3).b(3);
+tibiaLength = -uLINK(ID.RLEG_J4).b(3);
+ankleH = 0.0335;
 
-%% 5) Generer la sequence d'empreintes (position de la CHEVILLE au sol, yaw = 0)
-cur.R = [0; -stepW/2];          % pose initiale : pieds cote a cote
-cur.L = [0;  stepW/2];
-init = cur;
+% Calcul de la hauteur du BODY
+zBody = hipOffsetZ + hipLength + (thighLength + tibiaLength)*cos(theta) + ankleH;
 
-if firstSwing == 'R', sides = {'R','L'}; else, sides = {'L','R'}; end
+% Position et orientation initiale du BODY en half-sitting 
+uLINK(ID.BODY).p = [0; 0; zBody];
+uLINK(ID.BODY).R = eye(3);
 
+% Mise a jour de la cinematique directe
+ForwardKinematics(ID.BODY);
+
+% Centre de masse initial
+CoM0 = calcCoM();
+
+% Positions initiales des chevilles en half-sitting
+pR0 = uLINK(ID.RLEG_J5).p;
+pL0 = uLINK(ID.LLEG_J5).p;
+
+% Generation des empreintes de pas ----------------------------------------
+stride = 0.020;
+nSteps = 6;
+
+% Positions initiales des pieds
+init.R = pR0;
+init.L = pL0;
+cur = init;
+
+% Struct des pas
 steps = struct('side', {}, 'p', {});
+
 for k = 1:nSteps
-    s = sides{mod(k-1,2)+1};    % pied qui bouge
-    o = sides{mod(k,2)+1};      % pied d'appui
-    if k == 1
-        x = cur.(o)(1) + stride/2;       % premier pas : demi-pas
-    elseif k == nSteps
-        x = cur.(o)(1);                  % dernier pas : on ramene le pied a cote de l'autre
+    % Varier entre pied d'appui et celui qui swing
+    if mod(k,2) == 1
+        swing = 'R';
+        support = 'L';
     else
-        x = cur.(o)(1) + stride;         % pas normal : on depasse le pied d'appui d'un pas
+        swing = 'L';
+        support = 'R';
     end
-    cur.(s)(1) = x;
-    steps(k).side = s;
-    steps(k).p    = cur.(s);             % [x; y]
+
+    % Determiner la longueur du pas
+    if k == 1
+        stepLength = stride/2;
+    elseif k == nSteps
+        stepLength = 0;
+    else
+        stepLength = stride;
+    end
+
+    % Pied qui swing devient-> support + stepLength
+    cur.(swing)(1) = cur.(support)(1) + stepLength;
+
+    % Sauvegarder l'empreinte
+    steps(k).side = swing;
+    steps(k).p = cur.(swing);
 end
 
-% Affichage
-for k = 1:nSteps
-    fprintf('Pas %d (%s) : x = %.3f, y = %.3f\n', k, steps(k).side, steps(k).p(1), steps(k).p(2));
-end
+% Generation de la trajectoire du ZMP -------------------------------------
 
-%% 6) Visualisation des empreintes (rectangles centres sur la semelle)
-figure; hold on; axis equal; grid on;
-xlabel('x [m]'); ylabel('y [m]'); title('Empreintes des pieds du Darwin-OP');
-drawFoot = @(p, col) patch( p(1)+footOx+[-1 1 1 -1]*footL/2, p(2)+[-1 -1 1 1]*footW/2, col, 'FaceAlpha', 0.4);
+% Parametres temporels
+dt = 0.01; % pas de temps
+Tinit = 1.0; % maintien position initiale
+Tds = 0.1; % double support
+Tss = 0.4; % simple support
+Tend = 1.0; % maintien position finale
 
-drawFoot(init.R, [0.6 0.6 0.6]);  drawFoot(init.L, [0.6 0.6 0.6]);   % pose initiale (gris)
-for k = 1:nSteps
-    if steps(k).side == 'R', col = 'r'; else, col = 'b'; end
-    drawFoot(steps(k).p, col);
-    text(steps(k).p(1), steps(k).p(2), num2str(k), 'HorizontalAlignment', 'center');
-end
+% Nombre d'echantillons par phase
+Ninit = round(Tinit/dt);
+Nds = round(Tds/dt);
+Nss = round(Tss/dt);
+Nend = round(Tend/dt);
 
-%% 7) Sauvegarder pour l'etape 3 (trajectoire du ZMP)
-save('empreintes.mat', 'steps', 'init', 'stride', 'stepW', 'footL', 'footW', 'footOx', 'ankleH');
+% Position initiale du ZMP
+zmp0 = CoM0(1:2);
 
+% Positions courantes des pieds
+cur = init;
 
-%% =====================  ETAPE 3 : TRAJECTOIRE DU ZMP  =====================
+% Phase initiale : ZMP immobile
+zmpRef = repmat(zmp0, 1, Ninit); % copier le zmp0 Ninit fois
 
-%% 8) Parametres temporels
-dt    = 0.01;    % pas d'echantillonnage [s]
-Tinit = 1.0;     % double appui initial : ZMP au milieu des pieds [s]
-Tds   = 0.1;     % double appui a chaque pas : le ZMP passe d'un pied a l'autre [s]
-Tss   = 0.4;     % simple appui : ZMP fixe sur le pied d'appui [s]
-Tend  = 1.0;     % maintien final : ZMP au milieu des pieds [s]
+% Etat d'appui
+% 0 = double appui
+% 1 = appui droit
+% 2 = appui gauche
+state = zeros(1, Ninit);
 
-%% 9) CoM initial et hauteur du CoM (utile pour le pendule inverse a l'etape 4)
-M = 0;  MC = zeros(3,1);
-for n = 1:length(uLINK)
-    M  = M  + uLINK(n).m;
-    MC = MC + uLINK(n).m * (uLINK(n).p + uLINK(n).R * uLINK(n).c);
-end
-com0 = MC / M;              % CoM global dans la pose initiale (sol en z = 0)
-zc   = com0(3);             % hauteur du CoM au-dessus du sol [m]
-Tc   = sqrt(zc/9.81);       % constante de temps du pendule inverse [s]
-fprintf('Masse totale = %.3f kg\n', M);
-fprintf('CoM initial : [%.4f %.4f %.4f] m,  zc = %.4f m,  Tc = %.3f s\n', com0, zc, Tc);
+% Position precedente du ZMP
+zmpPrev = zmp0;
 
-%% 10) Segments de la trajectoire du ZMP
-% Chaque segment : [t0 t1 x0 y0 x1 y1 etat]   etat : 0 = double appui, 1 = appui droit, 2 = appui gauche
-% Regles : - ZMP initial au milieu des deux pieds
-%          - pendant le simple appui, ZMP au centre de la semelle du pied d'appui
-%          - pendant le double appui, ZMP lineaire entre l'ancien et le nouveau pied d'appui
-%          - a la fin, ZMP ramene au milieu des deux pieds
-off  = [footOx; 0];                       % centre de la semelle par rapport a la cheville
-tmp  = init;                              % positions des pieds, mises a jour pas a pas
-mid0 = (init.R + init.L)/2 + off;
-seg  = [];
-t    = 0;
-seg(end+1,:) = [t, t+Tinit, mid0', mid0', 0];   t = t + Tinit;
-prev = mid0;
+% Facteur d'interpolation du double appui
+alphaDS = (0:Nds-1)/Nds;
 
 for k = 1:nSteps
-    s = steps(k).side;                    % pied qui avance
-    if s == 'R', o = 'L'; st = 2; else, o = 'R'; st = 1; end   % o = pied d'appui
-    sup = tmp.(o) + off;                  % ZMP sur le pied d'appui
 
-    seg(end+1,:) = [t, t+Tds, prev', sup', 0];  t = t + Tds;   % double appui
-    steps(k).tLift = t;                                        % decollage du pied oscillant
-    seg(end+1,:) = [t, t+Tss, sup', sup', st];  t = t + Tss;   % simple appui
-    steps(k).tLand = t;                                        % pose du pied oscillant
+    % Determiner le pied oscillant et le pied d'appui
+    swing = steps(k).side;
 
-    prev = sup;
-    tmp.(s) = steps(k).p;                 % le pied oscillant est maintenant pose
+    if swing == 'R'
+        support = 'L';
+        supportState = 2;
+    else
+        support = 'R';
+        supportState = 1;
+    end
+
+    % ZMP desire pendant le simple appui
+    zmpSupport = cur.(support)(1:2);
+
+    % Double appui : transfert du ZMP
+    zmpDS = zmpPrev + (zmpSupport - zmpPrev)*alphaDS;
+
+    zmpRef = [zmpRef, zmpDS];
+    state = [state, zeros(1,Nds)];
+
+    % Instant de decollage du pied oscillant
+    steps(k).tLift = size(zmpRef,2)*dt;
+
+    % Simple appui : ZMP fixe
+    zmpSS = repmat(zmpSupport, 1, Nss);
+
+    zmpRef = [zmpRef, zmpSS];
+    state = [state, supportState*ones(1,Nss)];
+
+    % Instant de contact du pied oscillant
+    steps(k).tLand = size(zmpRef,2)*dt;
+
+    % Mise a jour de la position du pied
+    cur.(swing) = steps(k).p;
+
+    % Mise a jour du ZMP precedent
+    zmpPrev = zmpSupport;
 end
 
-midEnd = (tmp.R + tmp.L)/2 + off;
-seg(end+1,:) = [t, t+Tds,  prev', midEnd', 0];  t = t + Tds;
-seg(end+1,:) = [t, t+Tend, midEnd', midEnd', 0]; t = t + Tend;
-Ttot = t;
+% Position finale du ZMP : milieu des deux pieds
+zmpEnd = (cur.R(1:2) + cur.L(1:2))/2;
 
-%% 11) Echantillonnage de la trajectoire
-N      = round(Ttot/dt);
-tt     = (0:N-1) * dt;
-zmpRef = zeros(2, N);
-state  = zeros(1, N);
-for i = 1:size(seg,1)
-    idx = tt >= seg(i,1) & tt < seg(i,2);
-    a   = (tt(idx) - seg(i,1)) / (seg(i,2) - seg(i,1));
-    zmpRef(1,idx) = seg(i,3) + (seg(i,5) - seg(i,3)) * a;
-    zmpRef(2,idx) = seg(i,4) + (seg(i,6) - seg(i,4)) * a;
-    state(idx)    = seg(i,7);
+% Dernier double appui
+zmpDS = zmpPrev + (zmpEnd - zmpPrev)*alphaDS;
+
+zmpRef = [zmpRef, zmpDS];
+state = [state, zeros(1,Nds)];
+
+% Maintien final
+zmpRef = [zmpRef, repmat(zmpEnd,1,Nend+1)];
+state = [state, zeros(1,Nend+1)];
+
+% Vecteur temporel
+N = size(zmpRef,2);
+tt = (0:N-1)*dt;
+
+Ttot = tt(end);
+
+% Generation de la trajectoire du centre de masse -------------------------
+
+% Parametres du LIPM
+g = 9.81;
+zc = CoM0(3);
+Tc = sqrt(zc/g);
+
+beta = dt^2/Tc^2;
+
+% Positions initiale et finale desirees du CoM
+comStart = CoM0(1:2);
+comEnd = zmpEnd;
+
+% Construction de la matrice A
+A = zeros(N,N);
+
+% Condition initiale
+A(1,1) = 1;
+
+% Equations du LIPM discretise
+for k = 2:N-1
+    A(k,k-1) = -1;
+    A(k,k)   = 2 + beta;
+    A(k,k+1) = -1;
 end
-fprintf('Duree totale = %.2f s, %d echantillons (dt = %.3f s)\n', Ttot, N, dt);
+
+% Condition finale
+A(N,N) = 1;
+
+% Construction des vecteurs B
+Bx = beta*zmpRef(1,:)';
+By = beta*zmpRef(2,:)';
+
+% Conditions initiales
+Bx(1) = comStart(1);
+By(1) = comStart(2);
+
+% Conditions finales
+Bx(N) = comEnd(1);
+By(N) = comEnd(2);
+
+% Resolution du systeme selon X et Y
+Xc = A \ Bx;
+Yc = A \ By;
+
+% Trajectoire 3D du centre de masse
+comRef = [Xc';
+          Yc';
+          zc*ones(1,N)];
+
+% Vitesses du centre de masse
+comVel = zeros(3,N);
+
+comVel(1,:) = gradient(comRef(1,:),dt);
+comVel(2,:) = gradient(comRef(2,:),dt);
+
+% Accelerations du centre de masse (equations LIPM)
+comAcc = zeros(3,N);
+
+comAcc(1,:) = (comRef(1,:) - zmpRef(1,:))/Tc^2;
+comAcc(2,:) = (comRef(2,:) - zmpRef(2,:))/Tc^2;
+
+% Generation de la trajectoire du BODY ------------------------------------
+
+% Position initiale du BODY
+body0 = uLINK(ID.BODY).p;
+
+% Decalage initial entre le CoM et le BODY
+bodyOffset = body0 - CoM0;
+
+% Trajectoire de position du BODY
+bodyRef = comRef + bodyOffset;
+
+% Orientation constante du BODY
+bodyR = eye(3);
+
+% Vitesses et accelerations du BODY
+bodyVel = comVel;
+bodyAcc = comAcc;
+
+% Generation des trajectoires des pieds -----------------------------------
+
+% Hauteur maximale de levee du pied
+stepHeight = 0.020;
+
+% Initialisation des trajectoires
+footRRef = repmat(init.R, 1, N);
+footLRef = repmat(init.L, 1, N);
+
+% Positions courantes des pieds
+cur = init;
+
 for k = 1:nSteps
-    fprintf('Pas %d (%s) : decollage t = %.2f s, pose t = %.2f s\n', k, steps(k).side, steps(k).tLift, steps(k).tLand);
+
+    % Pied oscillant
+    swing = steps(k).side;
+
+    % Positions initiale et finale du pied
+    pStart = cur.(swing);
+    pEnd = steps(k).p;
+
+    % Instants de decollage et d'atterrissage
+    tLift = steps(k).tLift;
+    tLand = steps(k).tLand;
+
+    % Indices temporels
+    iLift = round(tLift/dt) + 1;
+    iLand = round(tLand/dt) + 1;
+
+    % Temps normalise
+    s = (0:iLand-iLift)/(iLand-iLift);
+
+    % Interpolation cubique (X et Y)
+    f = 3*s.^2 - 2*s.^3;
+
+    % Interpolation de degre 4 (Z)
+    h = 16*s.^2.*(1-s).^2;
+
+    % Trajectoire du pied oscillant
+    pSwing = pStart + (pEnd-pStart)*f;
+    pSwing(3,:) = pSwing(3,:) + stepHeight*h;
+
+    % Mise a jour de la trajectoire du pied
+    if swing == 'R'
+        footRRef(:,iLift:iLand) = pSwing;
+        footRRef(:,iLand:end) = ...
+            repmat(pEnd,1,N-iLand+1);
+    else
+        footLRef(:,iLift:iLand) = pSwing;
+        footLRef(:,iLand:end) = ...
+            repmat(pEnd,1,N-iLand+1);
+    end
+
+    % Mise a jour de la position courante
+    cur.(swing) = pEnd;
 end
 
-%% 12) Figures
-% a) Empreintes + trajectoire du ZMP (comme la Fig. 1 de l'enonce)
-figure; hold on; axis equal; grid on;
-xlabel('x [m]'); ylabel('y [m]'); title('Empreintes et trajectoire du ZMP');
-drawFoot(init.R, [0.6 0.6 0.6]);  drawFoot(init.L, [0.6 0.6 0.6]);
-for k = 1:nSteps
-    if steps(k).side == 'R', col = 'r'; else, col = 'b'; end
-    drawFoot(steps(k).p, col);
-    text(steps(k).p(1), steps(k).p(2), num2str(k), 'HorizontalAlignment', 'center');
+% Orientation constante des pieds
+footRRot = eye(3);
+footLRot = eye(3);
+
+% Generation des trajectoires articulaires --------------------------------
+
+% Parametres de convergence
+lambdaCoM = 0.8;
+tolCoM = 1e-5;
+tolIK = 1e-5;
+maxIterCoM = 30;
+
+% Sauvegarde de la posture initiale
+uLINK_initial = uLINK;
+
+% Indices des articulations
+idxR = FindRoute(ID.RLEG_J5);
+idxL = FindRoute(ID.LLEG_J5);
+
+% Premiere estimation de la trajectoire du BODY
+bodyEstimate = bodyRef;
+
+% Initialisation des trajectoires finales
+bodyRef = zeros(3,N);
+comActual = zeros(3,N);
+
+qR = zeros(6,N);
+qL = zeros(6,N);
+
+ikErrR = zeros(1,N);
+ikErrL = zeros(1,N);
+
+iterCoM = zeros(1,N);
+convergedCoM = false(1,N);
+
+for k = 1:N
+    % Estimation initiale du BODY
+    if k == 1
+        bodyPos = bodyEstimate(:,k);
+    else
+        previousCorrection = bodyRef(:,k-1) - bodyEstimate(:,k-1);
+        bodyPos = bodyEstimate(:,k) + previousCorrection;
+    end
+
+    % Poses desirees des pieds
+    TargetR.p = footRRef(:,k);
+    TargetR.R = footRRot;
+
+    TargetL.p = footLRef(:,k);
+    TargetL.R = footLRot;
+
+    % Correction iterative du centre de masse
+    for i = 1:maxIterCoM
+        % Pose du BODY
+        uLINK(ID.BODY).p = bodyPos;
+        uLINK(ID.BODY).R = bodyR;
+
+        % Cinematique inverse
+        errR = InverseKinematics(ID.RLEG_J5,TargetR);
+        errL = InverseKinematics(ID.LLEG_J5,TargetL);
+
+        % Cinematique directe et centre de masse
+        ForwardKinematics(ID.BODY);
+        CoM = calcCoM();
+
+        % Erreur du centre de masse
+        eCoM = comRef(:,k) - CoM;
+
+        % Verification de la convergence
+        if norm(eCoM) < tolCoM && errR < tolIK && errL < tolIK
+            convergedCoM(k) = true;
+            break;
+        end
+
+        % Correction de la position du BODY
+        if i < maxIterCoM
+            bodyPos = bodyPos + lambdaCoM*eCoM;
+        end
+    end
+
+    % Verification de la convergence
+    if ~convergedCoM(k)
+        uLINK = uLINK_initial;
+
+        error('Correction non convergente a t = %.3f s',tt(k));
+    end
+
+    % Sauvegarde des trajectoires
+    bodyRef(:,k) = uLINK(ID.BODY).p;
+    comActual(:,k) = CoM;
+
+    qR(:,k) = [uLINK(idxR).q]';
+    qL(:,k) = [uLINK(idxL).q]';
+
+    ikErrR(k) = errR;
+    ikErrL(k) = errL;
+
+    iterCoM(k) = i;
 end
-hZ = plot(zmpRef(1,:), zmpRef(2,:), 'k-', 'LineWidth', 2);
-hC = plot(com0(1), com0(2), 'gx', 'MarkerSize', 10, 'LineWidth', 2);   % CoM initial
-legend([hZ hC], {'ZMP de reference', 'CoM initial'});
 
-% b) x(t) et y(t) du ZMP
-figure;
-subplot(2,1,1); plot(tt, zmpRef(1,:), 'LineWidth', 1.5); grid on; ylabel('x_{zmp} [m]'); title('ZMP de reference');
-subplot(2,1,2); plot(tt, zmpRef(2,:), 'LineWidth', 1.5); grid on; ylabel('y_{zmp} [m]'); xlabel('t [s]');
+% Erreur residuelle du centre de masse
+comError = comRef - comActual;
 
-%% 13) Sauvegarder pour l'etape 4 (trajectoire du CoM et du pelvis)
-save('zmp.mat', 'tt', 'zmpRef', 'state', 'steps', 'init', 'dt', 'zc', 'Tc', 'com0', ...
-     'Tinit', 'Tds', 'Tss', 'Tend', 'stride', 'stepW', 'footL', 'footW', 'footOx', 'ankleH');
+% Restauration de la posture initiale
+uLINK = uLINK_initial;
+
+% Calcul des derivees temporelles -----------------------------------------
+
+% Derivees articulaires
+dqR = zeros(6,N);
+dqL = zeros(6,N);
+
+ddqR = zeros(6,N);
+ddqL = zeros(6,N);
+
+for j = 1:6
+    dqR(j,:) = gradient(qR(j,:),dt);
+    dqL(j,:) = gradient(qL(j,:),dt);
+
+    ddqR(j,:) = gradient(dqR(j,:),dt);
+    ddqL(j,:) = gradient(dqL(j,:),dt);
+end
+
+% Derivees du BODY
+bodyVel = zeros(3,N);
+bodyAcc = zeros(3,N);
+
+for j = 1:3
+    bodyVel(j,:) = gradient(bodyRef(j,:),dt);
+    bodyAcc(j,:) = gradient(bodyVel(j,:),dt);
+end
+
+% Exportation des trajectoires articulaires -------------------------------
+
+% Conversion des conventions Kajita vers URDF
+sR = [-1 -1 +1 +1 -1 +1]';
+sL = [-1 -1 -1 -1 +1 +1]';
+
+qR_urdf = sR .* qR;
+qL_urdf = sL .* qL;
+
+% Matrice des donnees a exporter
+exportData = [tt; qR_urdf; qL_urdf]';
+
+% Nom du fichier
+fileName = 'dynamic_test.txt';
+
+% Ouverture du fichier
+fid = fopen(fileName,'w');
+
+% Nombre d'echantillons
+fprintf(fid,'%d\n',N);
+
+% Periode d'echantillonnage
+fprintf(fid,'%.10e\n',dt);
+
+% Format : temps + 12 angles articulaires
+lineFormat = [repmat('%.10e\t',1,12),'%.10e\n'];
+
+% Ecriture des trajectoires
+fprintf(fid,lineFormat,exportData');
+
+% Fermeture du fichier
+fclose(fid);
+
+fprintf('Fichier genere : %s\n',fileName);
+fprintf('Nombre echantillons : %d\n',N);
+fprintf('Duree de la marche : %.2f s\n',Ttot);
